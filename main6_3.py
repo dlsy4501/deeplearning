@@ -51,8 +51,22 @@ class AdvancedEfficientNet(nn.Module):
 
 # 4. 모델 로드 (사전 학습된 가중치 사용)
 model = AdvancedEfficientNet().to(device)
+
+# 체크포인트 로드 및 키 확인
 checkpoint = torch.load("EfficientNetB6_best.pth", map_location=device)
-model.load_state_dict(checkpoint['model_state_dict'])
+
+# 체크포인트 구조 확인
+print("체크포인트 키들:", list(checkpoint.keys()))
+
+# 모델 state_dict 로드 (키 구조에 따라 선택)
+if 'model_state_dict' in checkpoint:
+    model.load_state_dict(checkpoint['model_state_dict'])
+elif 'state_dict' in checkpoint:
+    model.load_state_dict(checkpoint['state_dict'])
+else:
+    # 체크포인트가 직접 state_dict인 경우
+    model.load_state_dict(checkpoint)
+
 model.eval()
 
 # 5. CIFAR-100 테스트셋 정확도 계산
@@ -77,9 +91,9 @@ def generate_results():
     image_dir = './Dataset/CImages/'
     results = []
     
-    # 0001.jpg ~ 3000.jpg 순차 처리
+    # 1.jpg ~ 3000.jpg 순차 처리
     for i in range(1, 3001):
-        img_path = os.path.join(image_dir, f"{i:04d}.jpg")
+        img_path = os.path.join(image_dir, f"{i}.jpg")
         
         try:
             image = Image.open(img_path).convert('RGB')
@@ -96,7 +110,7 @@ def generate_results():
                 print(f"처리 완료: {i}/3000")
                 
         except Exception as e:
-            print(f"이미지 {i:04d}.jpg 처리 중 오류: {e}")
+            print(f"이미지 {i}.jpg 처리 중 오류: {e}")
             results.append(f"{i:04d}, 0")  # 오류 시 기본값
     
     # 결과 파일 저장

@@ -12,10 +12,10 @@ from torch.optim.lr_scheduler import OneCycleLR
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 scaler = GradScaler()
 
-# 2. 데이터 전처리 최적화 (입력 크기 224x224로 축소)
+# 2. 데이터 전처리 최적화 (입력 크기 320x320)
 transform = transforms.Compose([
-    transforms.Resize(224),
-    transforms.CenterCrop(224),
+    transforms.Resize(320),
+    transforms.CenterCrop(320),
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -26,14 +26,14 @@ train_set = datasets.CIFAR100(root='./data', train=True, download=True, transfor
 test_set = datasets.CIFAR100(root='./data', train=False, download=True, transform=transform)
 
 # 4. 배치 크기 증가 (GPU 메모리 허용시 64로 변경)
-train_loader = DataLoader(train_set, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
-test_loader = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=4, pin_memory=True)
+train_loader = DataLoader(train_set, batch_size=16, shuffle=True, num_workers=4, pin_memory=True)
+test_loader = DataLoader(test_set, batch_size=16, shuffle=False, num_workers=4, pin_memory=True)
 
 # 5. 모델 준비 (간소화된 구조)
 class CustomEfficientNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.base = models.efficientnet_b2(weights='IMAGENET1K_V1')
+        self.base = models.efficientnet_b6(weights='IMAGENET1K_V1')
         in_features = self.base.classifier[1].in_features  # shape 에러 핵심 수정 부분
         
         # 분류기 단순화

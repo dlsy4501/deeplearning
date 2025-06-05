@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 import numpy as np
-from sklearn.metrics import accuracy_score
 import random
 
 # 시드 설정 (재현성을 위해)
@@ -18,8 +17,8 @@ scaler = GradScaler()
 
 # 1. 강화된 데이터 전처리 및 증강
 train_transform = transforms.Compose([
-    transforms.Resize(320),  # EfficientNet-B6에 적합한 더 큰 해상도
-    transforms.RandomCrop(320, padding=24),  # 랜덤 크롭 with 패딩
+    transforms.Resize(320),  # 320x320 해상도로 수정
+    transforms.RandomCrop(320, padding=20),  # 패딩 조정
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomRotation(degrees=15),
     transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
@@ -29,7 +28,7 @@ train_transform = transforms.Compose([
 ])
 
 test_transform = transforms.Compose([
-    transforms.Resize(320),
+    transforms.Resize(320),  # 320x320 해상도로 수정
     transforms.CenterCrop(320),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -39,9 +38,9 @@ test_transform = transforms.Compose([
 train_set = datasets.CIFAR100(root='./data', train=True, download=True, transform=train_transform)
 test_set = datasets.CIFAR100(root='./data', train=False, download=True, transform=test_transform)
 
-# 배치 크기 증가 (메모리 허용 시)
-train_loader = DataLoader(train_set, batch_size=16, shuffle=True, num_workers=4, pin_memory=True)
-test_loader = DataLoader(test_set, batch_size=16, shuffle=False, num_workers=4, pin_memory=True)
+# 배치 크기를 12로 조정 (320 해상도에 맞게)
+train_loader = DataLoader(train_set, batch_size=12, shuffle=True, num_workers=4, pin_memory=True)
+test_loader = DataLoader(test_set, batch_size=12, shuffle=False, num_workers=4, pin_memory=True)
 
 # 3. 개선된 모델 구조
 class ImprovedEfficientNet(nn.Module):
@@ -119,15 +118,15 @@ def unfreeze_backbone(model):
     for param in model.parameters():
         param.requires_grad = True
 
-# 7. 학습 루프
-num_epochs = 20
+# 7. 학습 루프 (5 에포크로 수정)
+num_epochs = 5
 best_acc = 0.0
-patience = 5
+patience = 3  # 에포크 수에 맞게 patience 조정
 patience_counter = 0
 
 for epoch in range(num_epochs):
-    # 처음 3 에포크는 backbone freeze
-    if epoch < 3:
+    # 처음 2 에포크는 backbone freeze (5 에포크에 맞게 조정)
+    if epoch < 2:
         freeze_backbone(model)
     else:
         unfreeze_backbone(model)
@@ -204,16 +203,8 @@ for epoch in range(num_epochs):
 model.load_state_dict(torch.load("best_CIFAR100_EfficientNetB6.pth"))
 model.eval()
 
-# Test Time Augmentation (TTA) 적용
-def test_time_augmentation(model, test_loader, device, num_tta=5):
-    tta_transforms = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(degrees=5),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-    
+# Test Time Augmentation (TTA) 적용 - 수정된 버전
+def test_time_augmentation(model, test_loader, device, num_tta=3):
     all_predictions = []
     all_labels = []
     
@@ -225,10 +216,11 @@ def test_time_augmentation(model, test_loader, device, num_tta=5):
             outputs = model(data)
             batch_predictions = torch.softmax(outputs, dim=1)
             
-            # TTA 예측들
+            # TTA 예측들 (간단한 flip 적용)
             for _ in range(num_tta - 1):
-                # 여기서는 간단히 원본만 사용 (실제로는 TTA 변형을 적용)
-                outputs_tta = model(data)
+                # 수평 flip 적용
+                flipped_data = torch.flip(data, dims=[3])  # width dimension flip
+                outputs_tta = model(flipped_data)
                 batch_predictions += torch.softmax(outputs_tta, dim=1)
             
             batch_predictions /= num_tta
@@ -237,7 +229,7 @@ def test_time_augmentation(model, test_loader, device, num_tta=5):
             all_predictions.extend(predicted.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
     
-    return accuracy_score(all_labels, all_predictions)
+    return len([1 for i, j in zip(all_predictions, all_labels) if i == j]) / len(all_labels)
 
 # 최종 테스트 정확도 (TTA 적용)
 final_accuracy = test_time_augmentation(model, test_loader, device, num_tta=3)

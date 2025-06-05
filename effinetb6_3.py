@@ -29,7 +29,6 @@ train_transform = transforms.Compose([
     transforms.RandomVerticalFlip(p=0.1),  # 추가
     transforms.RandomRotation(degrees=10),  # 추가
     transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),  # 추가
-    transforms.RandomErasing(p=0.1, scale=(0.02, 0.2)),  # 추가
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
